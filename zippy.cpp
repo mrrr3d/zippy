@@ -93,6 +93,11 @@ void decompressFile(const std::string zipFileName) {
                                  static_cast<std::filesystem::perms>(perm),
                                  std::filesystem::perm_options::replace);
   }
+  int rv = zip_close(zip);
+  if (0 != rv) {
+    std::cerr << "zip_close error: " << rv << std::endl;
+    free(zip);
+  }
 }
 
 int main(int argc, char *argv[]) {
