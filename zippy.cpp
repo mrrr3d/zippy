@@ -89,6 +89,9 @@ void decompressFile(const std::string zipFileName) {
     } else if (!std::filesystem::exists(stat.name)) {
       std::filesystem::create_directory(stat.name);
     }
+    std::filesystem::permissions(stat.name,
+                                 static_cast<std::filesystem::perms>(perm),
+                                 std::filesystem::perm_options::replace);
   }
 }
 
