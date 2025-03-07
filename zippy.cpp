@@ -6,32 +6,47 @@
 #include <iostream>
 #include <zip.h>
 
-void compressFile(const char *zipFileName, const char *fileToAdd) {
-  int err = 0;
-  zip_t *zip = zip_open(zipFileName, ZIP_CREATE | ZIP_TRUNCATE, &err);
-  if (!zip) {
-    std::cerr << "Failed to open zip file: " << zip_strerror(zip) << std::endl;
+void compressFile(const std::string zipFileName, const std::string fileToAdd) {
+  auto entries = std::filesystem::recursive_directory_iterator(fileToAdd);
+
+  int errcode = 0;
+  auto zipFile = zip_open(zipFileName.c_str(), ZIP_CREATE, &errcode);
+  if (!zipFile) {
+    zip_error_t error;
+    zip_error_init_with_code(&error, errcode);
+    std::cerr << "zip_open error: " << zip_error_strerror(&error) << std::endl;
+    zip_error_fini(&error);
     return;
   }
 
-  zip_source_t *source = zip_source_file(zip, fileToAdd, 0, 0);
-  if (!source) {
-    std::cerr << "Failed to create zip source: " << zip_strerror(zip)
-              << std::endl;
-    zip_close(zip);
-    return;
+  for (const auto &entry : entries) {
+    std::cout << entry.path() << " " << entry.is_directory() << std::endl;
+    if (entry.is_directory()) {
+      auto idx = zip_dir_add(zipFile, entry.path().c_str(), ZIP_FL_ENC_GUESS);
+      if (-1 == idx) {
+        std::cerr << "zip_add_dir failed: " << idx << std::endl;
+      }
+    } else {
+      auto src =
+          zip_source_file(zipFile, entry.path().c_str(), 0, ZIP_LENGTH_TO_END);
+      auto idx = zip_file_add(zipFile, entry.path().c_str(), src,
+                              ZIP_FL_ENC_GUESS | ZIP_FL_OVERWRITE);
+      if (-1 == idx) {
+        zip_source_free(src);
+        std::cerr << "zip_file_add error: " << idx << std::endl;
+        return;
+      }
+    }
   }
 
-  if (zip_file_add(zip, fileToAdd, source, ZIP_FL_OVERWRITE) < 0) {
-    std::cerr << "Failed to add file to zip: " << zip_strerror(zip)
-              << std::endl;
-    zip_source_free(source);
-    zip_close(zip);
-    return;
+  // TODO: password
+  // TODO: compression level and method
+  // TODO: file permissions
+  int rv = zip_close(zipFile);
+  if (0 != rv) {
+    std::cerr << "zip_close error: " << rv << std::endl;
+    free(zipFile);
   }
-
-  zip_close(zip);
-  std::cout << "File compressed successfully: " << zipFileName << std::endl;
 }
 
 void decompressFile(const std::string zipFileName) {
@@ -115,6 +130,7 @@ int main(int argc, char *argv[]) {
     }
     std::string zipfile = argv[2];
     std::string dir = argv[3];
+    compressFile(zipfile, dir);
   } else if (mode == "-x") {
     if (argc < 3) {
       std::cerr << "Error: -x requires one parameter." << std::endl;
